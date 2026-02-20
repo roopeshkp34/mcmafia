@@ -1,0 +1,16 @@
+version: "3"
+services:
+  pdfboxjuice:
+    image: pdfboxjuice
+    container_name: pdfboxjuice
+    build:
+      context: pdfboxjuice
+      dockerfile: Dockerfile
+    environment:
+      - JAVA_OPTS=-Xmx2g -Xms1g
+    deploy:
+      resources:
+        limits:
+          memory: 3G
+    ports:
+      - "8080:8080"
