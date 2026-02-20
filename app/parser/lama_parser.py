@@ -11,16 +11,17 @@ from .database import DatabaseClient
 try:
     from llama_cloud.types import ItemsPageStructuredResultPageItemTableItem
 except ImportError:
-    ItemsPageStructuredResultPageItemTableItem = type(None) # Fallback
+    ItemsPageStructuredResultPageItemTableItem = type(None)  # Fallback
 
 load_dotenv()
+
 
 class LlamaParser:
     def __init__(self, api_key: str = None):
         self.api_key = api_key or os.getenv("llama_parse_key")
         if not self.api_key:
             raise ValueError("llama_parse_key not found in environment variables")
-        
+
         self.client = AsyncLlamaCloud(api_key=self.api_key)
         self.db_client = DatabaseClient()
 
@@ -29,7 +30,9 @@ class LlamaParser:
 
     async def download_images(self, result):
         for image in result.images_content_metadata.images:
-            if image.presigned_url is None or not self.is_page_screenshot(image.filename):
+            if image.presigned_url is None or not self.is_page_screenshot(
+                image.filename
+            ):
                 continue
 
             print(f"Downloading {image.filename}, {image.size_bytes} bytes")
@@ -43,9 +46,11 @@ class LlamaParser:
 
     async def parse_document(self, file_path: str):
         print(f"Uploading and parsing document: {file_path}")
-        
+
         # Upload and parse a document
-        file_obj = await self.client.files.create(file=open(file_path, "rb"), purpose="parse")
+        file_obj = await self.client.files.create(
+            file=open(file_path, "rb"), purpose="parse"
+        )
 
         result = await self.client.parsing.parse(
             file_id=file_obj.id,
@@ -64,9 +69,7 @@ class LlamaParser:
                 "ignore": {
                     "ignore_diagonal_text": True,
                 },
-                "ocr_parameters": {
-                    "languages": ["fr"]
-                }
+                "ocr_parameters": {"languages": ["fr"]},
             },
             expand=["text", "markdown", "items", "images_content_metadata"],
         )
@@ -77,18 +80,22 @@ class LlamaParser:
             "file_name": os.path.basename(file_path),
             "markdown_pages": [page.markdown for page in result.markdown.pages],
             "text_pages": [page.text for page in result.text.pages],
-            "tables": []
+            "tables": [],
         }
 
         # Extract tables
         for page in result.items.pages:
             for item in page.items:
-                if hasattr(item, 'rows') and hasattr(item, 'b_box'): # Generic check if class import failed
-                    parsed_data["tables"].append({
-                        "page_number": page.page_number,
-                        "rows": item.rows,
-                        "b_box": item.b_box
-                    })
+                if hasattr(item, "rows") and hasattr(
+                    item, "b_box"
+                ):  # Generic check if class import failed
+                    parsed_data["tables"].append(
+                        {
+                            "page_number": page.page_number,
+                            "rows": item.rows,
+                            "b_box": item.b_box,
+                        }
+                    )
 
         # Insert into MongoDB
         inserted_id = await self.db_client.insert_parsed_data(parsed_data)
@@ -96,8 +103,9 @@ class LlamaParser:
 
         # Download screenshots
         await self.download_images(result)
-        
+
         return inserted_id
+
 
 async def main():
     parser = LlamaParser()
@@ -107,6 +115,7 @@ async def main():
         await parser.parse_document(file_to_parse)
     else:
         print(f"File not found: {file_to_parse}")
+
 
 if __name__ == "__main__":
     asyncio.run(main())

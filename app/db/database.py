@@ -4,14 +4,15 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+
 class DatabaseClient:
     def __init__(self):
         self.mongo_url = os.getenv("mongo_url")
         self.db_name = os.getenv("mongo_db_name", "mcmafia")
-        
+
         if not self.mongo_url:
             raise ValueError("mongo_url not found in environment variables")
-            
+
         self.client = AsyncIOMotorClient(self.mongo_url)
         self.db = self.client[self.db_name]
 
