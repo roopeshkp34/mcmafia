@@ -1,8 +1,0 @@
-version: "3"
-services:
-  pdfboxjuice:
-    image: pdfboxjuice
-    build: .
-    container_name: pdfboxjuice
-    ports:
-      - "8080:8080"

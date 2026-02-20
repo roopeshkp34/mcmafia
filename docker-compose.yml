@@ -1,16 +1,15 @@
 version: "3"
 services:
-  pdfboxjuice:
-    image: pdfboxjuice
-    container_name: pdfboxjuice
+  app:
+    image: "mcmafia"
     build:
-      context: pdfboxjuice
+      context: .
       dockerfile: Dockerfile
-    environment:
-      - JAVA_OPTS=-Xmx2g -Xms1g
-    deploy:
-      resources:
-        limits:
-          memory: 3G
+    container_name: mcmafia-dev-container
+    restart: unless-stopped
     ports:
-      - "8080:8080"
+      - ${PORT}:8000
+    volumes:
+      - ./app:/app/app
+    env_file:
+      - .env
