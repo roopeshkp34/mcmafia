@@ -13,8 +13,9 @@ class Settings(BaseSettings):
     AZURE_OPENAI_ENDPOINT: str
     AZURE_OPENAI_API_VERSION: str
     AZURE_OPENAI_DEPLOYMENT: str
-
+    LLAMA_PARSE_API_KEY: str
     MONGO_URI: str
+    MONGO_DB_NAME: str
 
 
 settings = Settings()

@@ -3,8 +3,8 @@ import httpx
 import re
 import asyncio
 from llama_cloud import AsyncLlamaCloud
-from dotenv import load_dotenv
-from .database import DatabaseClient
+from app.db.database import DatabaseClient
+from app.core.config import settings
 
 # In LlamaCloud SDK some types might be needed for isinstance checks if they are exported
 # If not, we can use Duck Typing or internal imports
@@ -13,12 +13,11 @@ try:
 except ImportError:
     ItemsPageStructuredResultPageItemTableItem = type(None)  # Fallback
 
-load_dotenv()
 
 
 class LlamaParser:
     def __init__(self, api_key: str = None):
-        self.api_key = api_key or os.getenv("llama_parse_key")
+        self.api_key = api_key or settings.LLAMA_PARSE_API_KEY
         if not self.api_key:
             raise ValueError("llama_parse_key not found in environment variables")
 
@@ -44,12 +43,11 @@ class LlamaParser:
             except Exception as e:
                 print(f"Error downloading image {image.filename}: {e}")
 
-    async def parse_document(self, file_path: str):
-        print(f"Uploading and parsing document: {file_path}")
+    async def parse_document(self, file: UploadFile):
 
         # Upload and parse a document
         file_obj = await self.client.files.create(
-            file=open(file_path, "rb"), purpose="parse"
+            file=file.file , purpose="parse"
         )
 
         result = await self.client.parsing.parse(
@@ -77,7 +75,7 @@ class LlamaParser:
         # Prepare data for MongoDB
         parsed_data = {
             "file_id": file_obj.id,
-            "file_name": os.path.basename(file_path),
+            "file_name": file.filename,
             "markdown_pages": [page.markdown for page in result.markdown.pages],
             "text_pages": [page.text for page in result.text.pages],
             "tables": [],
@@ -98,7 +96,7 @@ class LlamaParser:
                     )
 
         # Insert into MongoDB
-        inserted_id = await self.db_client.insert_parsed_data(parsed_data)
+        inserted_id = await self.db_client.insert_parsed_data("parsed_documents", parsed_data)
         print(f"Successfully pushed parsed data to MongoDB with ID: {inserted_id}")
 
         # Download screenshots

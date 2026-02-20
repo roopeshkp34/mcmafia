@@ -1,14 +1,14 @@
 import os
 from motor.motor_asyncio import AsyncIOMotorClient
-from dotenv import load_dotenv
 
-load_dotenv()
+from app.core.config import settings
+
 
 
 class DatabaseClient:
     def __init__(self):
-        self.mongo_url = os.getenv("mongo_url")
-        self.db_name = os.getenv("mongo_db_name", "mcmafia")
+        self.mongo_url = settings.MONGO_URI
+        self.db_name = settings.MONGO_DB_NAME
 
         if not self.mongo_url:
             raise ValueError("mongo_url not found in environment variables")
