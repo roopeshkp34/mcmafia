@@ -12,7 +12,10 @@ class SourceDocument(BaseModel):
 
 class AgentStep(BaseModel):
     agent: str
-    tool_calls: List[Dict[str, Any]]
+    tool: Optional[str] = None
+    input: Optional[Dict[str, Any]] = None
+    content: Optional[str] = None
+    tool_calls: Optional[List[Dict[str, Any]]] = None
     
 class ChatResponse(BaseModel):
     response: str = Field(..., description="The assistant's response")

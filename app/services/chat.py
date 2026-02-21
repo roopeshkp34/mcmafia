@@ -170,17 +170,17 @@ class ChatService:
         # Collect steps with traceability
         steps = []
         for msg in messages:
-            agent_name = getattr(msg, "name", "supervisor")
+            agent_name = getattr(msg, "name", None) or "supervisor"
             if hasattr(msg, "tool_calls") and msg.tool_calls:
                 for tc in msg.tool_calls:
                     steps.append({
-                        "agent": agent_name,
+                        "agent": str(agent_name),
                         "tool": tc.get("name"),
                         "input": tc.get("args")
                     })
             elif hasattr(msg, "content") and msg.content and agent_name != "supervisor":
                 steps.append({
-                    "agent": agent_name,
+                    "agent": str(agent_name),
                     "content": msg.content[:200] + "..." if len(msg.content) > 200 else msg.content
                 })
 
