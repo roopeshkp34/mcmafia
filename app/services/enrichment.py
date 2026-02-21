@@ -41,6 +41,26 @@ class EnrichmentService:
             print(f"Error identifying company: {e}")
             return "Unknown Company"
 
+    async def identify_ticker(self, text: str) -> str:
+        """
+        Uses LLM to identify the stock ticker symbol from the document text.
+        """
+        prompt = (
+            "Extract the stock ticker symbol (e.g., AAPL, RELIANCE, THERMAX) from the following text of a financial filing. "
+            "If multiple tickers are present, choose the primary one for the reporting company. "
+            "Return ONLY the ticker symbol and nothing else. If not found, return 'UNKNOWN'.\n\n"
+            f"Text: {text[:3000]}"
+        )
+        try:
+            response = await self.llm.ainvoke(prompt)
+            ticker = response.content.strip().upper()
+            # Clean up if LLM added extra text
+            ticker = re.sub(r'[^A-Z0-0]', '', ticker)
+            return ticker if ticker else "UNKNOWN"
+        except Exception as e:
+            print(f"Error identifying ticker: {e}")
+            return "UNKNOWN"
+
     async def fetch_tavily_enrichment(self, company_name: str) -> dict:
         """
         Calls Tavily Search API to get enrichment data for the company.

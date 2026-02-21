@@ -29,21 +29,27 @@ class MongoToESSyncer:
             if isinstance(page, dict):
                 first_page_text = page.get("text", "")
                 if not first_page_text and "items" in page:
-                     first_page_text = "\n".join([item.get("value", "") for item in page["items"] if isinstance(item, dict) and "value" in item])
+                     # Flatten items recursively or just take first level
+                     first_page_text = self._flatten_text(page.get("items", []))
 
         # Advanced Enrichment
         company_name = await enrichment_service.identify_company(first_page_text or file_name)
-        ticker = enrichment_service.extract_ticker(file_name)
+        ticker = await enrichment_service.identify_ticker(first_page_text or file_name)
         enrichment_data = await enrichment_service.fetch_tavily_enrichment(company_name)
         
         logger.info(f"Syncing document: {file_name} (Company: {company_name}, Ticker: {ticker})")
         
         for i, page in enumerate(pages):
             text_content = ""
+            page_items = []
             if isinstance(page, dict):
                 text_content = page.get("text", "")
-                if not text_content and "items" in page:
-                    text_content = "\n".join([item.get("value", "") for item in page["items"] if isinstance(item, dict) and "value" in item])
+                items = page.get("items", [])
+                if not text_content and items:
+                    text_content = self._flatten_text(items)
+                
+                # Extract items with bboxes
+                page_items = self._extract_es_items(items)
             
             if not text_content:
                 continue
@@ -65,6 +71,7 @@ class MongoToESSyncer:
                 "text": text_content,
                 "vector_embedding": vector,
                 "metadata": metadata,
+                "items": page_items,
                 "filing_date": "2024-01-01" 
             }
             
@@ -75,6 +82,32 @@ class MongoToESSyncer:
                 logger.error(f"Error indexing page {i+1} of {file_name}: {e}")
             
         logger.info(f"Finished syncing {len(pages)} pages for {file_name}")
+
+    def _flatten_text(self, items):
+        text_parts = []
+        for item in items:
+            if isinstance(item, dict):
+                val = item.get("value") or item.get("text") or item.get("md", "")
+                if val:
+                    text_parts.append(str(val))
+                if "items" in item:
+                    text_parts.append(self._flatten_text(item["items"]))
+        return "\n".join(text_parts)
+
+    def _extract_es_items(self, items):
+        es_items = []
+        for item in items:
+            if isinstance(item, dict):
+                text = item.get("value") or item.get("text") or item.get("md", "")
+                bbox = item.get("bbox", [])
+                if text and bbox:
+                    es_items.append({
+                        "text": str(text),
+                        "bbox": bbox
+                    })
+                if "items" in item:
+                    es_items.extend(self._extract_es_items(item["items"]))
+        return es_items
 
     async def sync_existing_data(self):
         """

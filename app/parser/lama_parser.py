@@ -23,12 +23,28 @@ ES_MAPPING = {
             "metadata": {
                 "properties": {
                     "company_ticker": {"type": "keyword"},
+                    "company_name": {"type": "keyword"},
                     "fiscal_year": {"type": "integer"},
                     "report_type": {"type": "keyword"},
                     "section_name": {"type": "keyword"},
                     "page_number": {"type": "integer"},
                     "chunk_index": {"type": "integer"},
                     "total_chunks": {"type": "integer"},
+                }
+            },
+            "items": {
+                "type": "nested",
+                "properties": {
+                    "text": {"type": "text"},
+                    "bbox": {
+                        "properties": {
+                            "x": {"type": "float"},
+                            "y": {"type": "float"},
+                            "w": {"type": "float"},
+                            "h": {"type": "float"},
+                            "confidence": {"type": "float"}
+                        }
+                    }
                 }
             },
             "filing_date": {"type": "date"},
