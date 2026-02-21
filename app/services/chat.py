@@ -106,6 +106,7 @@ async def ann_narrative_search(query: str) -> List[Dict[str, Any]]:
         metadata = source.get("metadata", {})
         bboxes = []
         original_text = []
+        file_name = metadata.get("file_name")
         
         
         # Collect bounding boxes from both metadata and items
@@ -116,12 +117,13 @@ async def ann_narrative_search(query: str) -> List[Dict[str, Any]]:
                 if isinstance(item, dict) and "text" in item:
                     original_text.append(item["text"])
 
+
         results.append({
-            "text": source.get("text"),
+            "original_text": original_text,
+            "metadata": metadata,
             "bounding_box": bboxes,
             "page_no": metadata.get("page_number"),
-            "file_name": metadata.get("file_name"),
-            "original_text": original_text,
+            "pdf_name": file_name,
             "score": hit.get("_score")
         })
     
