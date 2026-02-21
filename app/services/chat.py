@@ -59,7 +59,7 @@ async def _query_documents_logic(query: str) -> List[Dict[str, Any]]:
             "metadata": metadata,
             "bounding_box": bboxes,
             "page_no": metadata.get("page_number"),
-            "pdf_name": file_name,
+            "file_name": file_name,
             "score": hit.get("_score")
         })
     
@@ -123,7 +123,7 @@ async def ann_narrative_search(query: str) -> List[Dict[str, Any]]:
             "metadata": metadata,
             "bounding_box": bboxes,
             "page_no": metadata.get("page_number"),
-            "pdf_name": file_name,
+            "file_name": file_name,
             "score": hit.get("_score")
         })
     
@@ -174,7 +174,7 @@ forensic_critic_agent = create_react_agent(
 class SourceDocumentInfo(BaseModel):
     page_no: int = Field(description="Page number of the source document")
     bounding_box: List[float] = Field(description="Bounding box coordinates [x0, y0, x1, y1]")
-    original_text: Optional[str] = Field(None, description="The original text snippet from the document")
+    original_text: Optional[Union[str, List[str]]] = Field(None, description="The original text snippet from the document")
     file_name: Optional[str] = Field(None, description="The name of the source file")
 
 class SupervisorResponse(BaseModel):
@@ -292,8 +292,11 @@ class ChatService:
                 
                 if s.bounding_box and s.bounding_box not in page_to_docs[key]["bounding_box"]:
                     page_to_docs[key]["bounding_box"].append(s.bounding_box)
-                if s.original_text and s.original_text not in page_to_docs[key]["original_text"]:
-                    page_to_docs[key]["original_text"].append(s.original_text)
+                
+                if s.original_text:
+                    text_to_add = s.original_text if isinstance(s.original_text, str) else " | ".join(s.original_text)
+                    if text_to_add not in page_to_docs[key]["original_text"]:
+                        page_to_docs[key]["original_text"].append(text_to_add)
             
             source_documents = [
                 {
@@ -376,12 +379,32 @@ class ChatService:
                                 if page_no is None:
                                     page_no = item.get("metadata", {}).get("page_number", 0)
                                 
+                                f_name = item.get("file_name") or item.get("pdf_name")
+                                if f_name is None:
+                                    f_name = item.get("metadata", {}).get("file_name")
+                                
+                                orig_text = item.get("original_text")
+                                if isinstance(orig_text, list):
+                                    orig_text = " | ".join([str(t) for t in orig_text])
+
                                 doc_info = {
                                     "page_no": page_no,
-                                    "bounding_box": normalized_boxes
+                                    "file_name": f_name,
+                                    "bounding_box": normalized_boxes,
+                                    "original_text": orig_text
                                 }
-                                # Deduplicate based on page and boxes
-                                if doc_info not in source_documents:
+                                # Deduplicate based on page and file
+                                is_duplicate = False
+                                for existing in source_documents:
+                                    if existing.get("page_no") == page_no and existing.get("file_name") == f_name:
+                                        # Merge boxes if needed
+                                        for box in normalized_boxes:
+                                            if box not in existing.get("bounding_box", []):
+                                                existing.setdefault("bounding_box", []).append(box)
+                                        is_duplicate = True
+                                        break
+                                
+                                if not is_duplicate:
                                     source_documents.append(doc_info)
                 except Exception as e:
                     # Silently fail for malformed tool messages

@@ -1,18 +1,11 @@
 import asyncio
 import json
 from unittest.mock import MagicMock, AsyncMock
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Union
 
 # Mock the dependencies before importing chat_service
 import sys
 from pydantic import BaseModel, Field
-
-# Create a dummy SupervisorResponse if needed or just use the one from chat
-# But we need to mock AzureChatOpenAI and other things
-
-# Mocking the imports in app.services.chat
-class MockLLM:
-    pass
 
 sys.modules["langchain_openai"] = MagicMock()
 sys.modules["langgraph.prebuilt"] = MagicMock()
@@ -24,19 +17,19 @@ sys.modules["app.services.embedding"] = MagicMock()
 # Now we can import the classes from chat.py
 from app.services.chat import ChatService, SupervisorResponse, SourceDocumentInfo
 
-async def test_fallback_parsing():
-    print("Testing JSON parsing fallback...")
+async def test_source_mapping():
+    print("Testing source mapping and fallback extraction...")
     
     chat_service = ChatService()
     
     # Mock result from ainvoke
     mock_json_content = {
-        "reasoning_for_response": "I analyzed the data and found a trend.",
-        "response": "The revenue increased by 10%.",
+        "reasoning_for_response": "I analyzed the data.",
+        "response": "The answer.",
         "sources": [
             {
                 "page_no": 10,
-                "original_text": "Revenue grew from 100 to 110",
+                "original_text": ["Raw text from document"],
                 "file_name": "report.pdf",
                 "bounding_box": [10.0, 20.0, 30.0, 40.0]
             }
@@ -44,17 +37,24 @@ async def test_fallback_parsing():
     }
     
     class MockMessage:
-        def __init__(self, content, name):
+        def __init__(self, content, name, msg_type="ai"):
             self.content = content
             self.name = name
-            self.type = "ai"
+            self.type = msg_type
             self.tool_calls = []
         
         def __getattr__(self, name):
             return None
 
+    tool_output = [{
+        "page_no": 10,
+        "file_name": "report.pdf",
+        "bounding_box": [[10.0, 20.0, 30.0, 40.0]],
+        "original_text": ["Raw text from document"]
+    }]
+
     messages = [
-        MockMessage("Some previous message", "data_extraction_agent"),
+        MockMessage(json.dumps(tool_output), "rag_agent", "tool"),
         MockMessage(json.dumps(mock_json_content), "supervisor")
     ]
     
@@ -70,17 +70,17 @@ async def test_fallback_parsing():
     
     # Verify results
     print(f"Response: {result['response']}")
-    print(f"Reasoning: {result['reasoning_for_response']}")
     print(f"Sources: {result['source_documents']}")
     
     assert result["response"] == mock_json_content["response"]
-    assert result["reasoning_for_response"] == mock_json_content["reasoning_for_response"]
     assert len(result["source_documents"]) == 1
-    assert result["source_documents"][0]["page_no"] == 10
-    assert result["source_documents"][0]["file_name"] == "report.pdf"
-    assert result["source_documents"][0]["bounding_box"] == [mock_json_content["sources"][0]["bounding_box"]]
+    src = result["source_documents"][0]
+    assert src["page_no"] == 10
+    assert src["file_name"] == "report.pdf"
+    assert src["original_text"] == "Raw text from document"
+    assert src["bounding_box"] == [[10.0, 20.0, 30.0, 40.0]]
     
     print("Test passed successfully!")
 
 if __name__ == "__main__":
-    asyncio.run(test_fallback_parsing())
+    asyncio.run(test_source_mapping())
