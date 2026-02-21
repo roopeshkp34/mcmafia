@@ -27,7 +27,7 @@ async def chat(request: ChatRequest):
         chat = await crud.chat.create_chat(db_obj)
     result = await chat_service.chat(request.query)
 
-    new_chat = {"type": "assistant", "content": result["response"]}
+    new_chat = {"type": "assistant", "content": result["response"], "metadata": result}
     chat["messages"].append(new_chat)
     await crud.chat.update_chat(request.thread_id, chat)
     # return ChatResponse(
@@ -36,3 +36,11 @@ async def chat(request: ChatRequest):
     #     reasoning_for_response=result.get("reasoning_for_response")
     # )
     return result
+
+
+@router.get("/chat/{thread_id}")
+async def get_chat(thread_id: str):
+    chat = await crud.chat.get_chat(thread_id)
+    if chat:
+        chat["_id"] = str(chat["_id"])
+    return chat
