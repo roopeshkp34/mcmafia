@@ -21,7 +21,7 @@ async def chat(request: ChatRequest):
     else:
         db_obj = {
             "thread_id": request.thread_id,
-            "title": "Dummy",
+            "title": await chat_service.generate_title(request.query),
             "messages": [{"type": "user", "content": request.query}],
         }
         chat = await crud.chat.create_chat(db_obj)
