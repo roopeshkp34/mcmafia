@@ -1,6 +1,6 @@
 import asyncio
 import os
-from parser.database import DatabaseClient
+from app.db.database import DatabaseClient
 
 async def test_mongodb_connection():
     print("Testing MongoDB connection...")
@@ -10,7 +10,8 @@ async def test_mongodb_connection():
             "test_key": "test_value",
             "description": "Integration test for DatabaseClient"
         }
-        inserted_id = await db_client.insert_parsed_data(test_data)
+        # Fixed: insert_parsed_data requires collection_name
+        inserted_id = await db_client.insert_parsed_data("test_collection", test_data)
         print(f"Successfully inserted test data. ID: {inserted_id}")
         
         # Cleanup

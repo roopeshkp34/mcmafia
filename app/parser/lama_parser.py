@@ -27,21 +27,21 @@ class LlamaParser:
     def is_page_screenshot(self, image_name: str) -> bool:
         return re.match(r"^page_(\d+)\.jpg$", image_name) is not None
 
-    async def download_images(self, result):
-        for image in result.images_content_metadata.images:
-            if image.presigned_url is None or not self.is_page_screenshot(
-                image.filename
-            ):
-                continue
+    # async def download_images(self, result):
+    #     for image in result.images_content_metadata.images:
+    #         if image.presigned_url is None or not self.is_page_screenshot(
+    #             image.filename
+    #         ):
+    #             continue
 
-            print(f"Downloading {image.filename}, {image.size_bytes} bytes")
-            try:
-                async with httpx.AsyncClient() as http_client:
-                    response = await http_client.get(image.presigned_url)
-                    with open(f"{image.filename}", "wb") as img_file:
-                        img_file.write(response.content)
-            except Exception as e:
-                print(f"Error downloading image {image.filename}: {e}")
+    #         print(f"Downloading {image.filename}, {image.size_bytes} bytes")
+    #         try:
+    #             async with httpx.AsyncClient() as http_client:
+    #                 response = await http_client.get(image.presigned_url)
+    #                 with open(f"{image.filename}", "wb") as img_file:
+    #                     img_file.write(response.content)
+    #         except Exception as e:
+    #             print(f"Error downloading image {image.filename}: {e}")
 
     async def parse_document(self, file: UploadFile):
 
@@ -76,10 +76,13 @@ class LlamaParser:
         parsed_data = {
             "file_id": file_obj.id,
             "file_name": file.filename,
-            "markdown_pages": [page.markdown for page in result.markdown.pages],
-            "text_pages": [page.text for page in result.text.pages],
+            "json_pages": [
+                page.model_dump() if hasattr(page, "model_dump") else page
+                for page in result.items.pages
+            ],
             "tables": [],
         }
+        print(result)
 
         # Extract tables
         for page in result.items.pages:
@@ -100,20 +103,6 @@ class LlamaParser:
         print(f"Successfully pushed parsed data to MongoDB with ID: {inserted_id}")
 
         # Download screenshots
-        await self.download_images(result)
+        # await self.download_images(result)
 
         return inserted_id
-
-
-async def main():
-    parser = LlamaParser()
-    # Default file from original script
-    file_to_parse = "./attention_is_all_you_need.pdf"
-    if os.path.exists(file_to_parse):
-        await parser.parse_document(file_to_parse)
-    else:
-        print(f"File not found: {file_to_parse}")
-
-
-if __name__ == "__main__":
-    asyncio.run(main())
