@@ -1,4 +1,4 @@
-from typing import List, Dict, Any, Optional, Union
+from typing import List, Dict, Any, Optional
 from pydantic import BaseModel, Field
 from langchain_openai import AzureChatOpenAI
 from langchain_core.tools import tool
@@ -25,26 +25,26 @@ async def _query_documents_logic(query: str) -> List[Dict[str, Any]]:
     """Helper function for querying documents."""
     vector = await embedding_service.get_embedding(query)
     index_name = "documents"
-    
+
     es_query = {
         "knn": {
             "field": "vector_embedding",
             "query_vector": vector,
             "k": 5,
-            "num_candidates": 50
+            "num_candidates": 50,
         }
     }
 
     response = await es_client.search(index_name, es_query)
-    
+
     results = []
     for hit in response.get("hits", {}).get("hits", []):
         bboxes = []
         original_text = []
         source = hit.get("_source", {})
         metadata = source.get("metadata", {})
-        file_name =metadata.get("file_name")
-        
+        file_name = metadata.get("file_name")
+
         # Collect bounding boxes from both metadata and items
         if "items" in source:
             for item in source["items"]:
@@ -52,17 +52,18 @@ async def _query_documents_logic(query: str) -> List[Dict[str, Any]]:
                     bboxes.append(item["bbox"])
                 if isinstance(item, dict) and "text" in item:
                     original_text.append(item["text"])
-        
-        
-        results.append({
-            "original_text": original_text,
-            "metadata": metadata,
-            "bounding_box": bboxes,
-            "page_no": metadata.get("page_number"),
-            "pdf_name": file_name,
-            "score": hit.get("_score")
-        })
-    
+
+        results.append(
+            {
+                "original_text": original_text,
+                "metadata": metadata,
+                "bounding_box": bboxes,
+                "page_no": metadata.get("page_number"),
+                "pdf_name": file_name,
+                "score": hit.get("_score"),
+            }
+        )
+
     return results
 
 
@@ -84,7 +85,7 @@ async def extract_financial_metrics(company_ticker: str) -> Dict[str, Any]:
     # Search for Revenue and Inventory in the documents
     query = f"Total Revenue and Total Inventory for {company_ticker} in 2024 and 2025"
     results = await _query_documents_logic(query)
-    
+
     return {"company": company_ticker, "data": results}
 
 
@@ -96,10 +97,10 @@ async def ann_narrative_search(query: str) -> List[Dict[str, Any]]:
     """
     vector = await embedding_service.get_embedding(query)
     index_name = "documents"
-    
+
     # Use the hybrid search with RRF that we added to es_client
     response = await es_client.hybrid_search(index_name, query, vector, k=3)
-    
+
     results = []
     for hit in response.get("hits", {}).get("hits", []):
         source = hit.get("_source", {})
@@ -107,8 +108,7 @@ async def ann_narrative_search(query: str) -> List[Dict[str, Any]]:
         bboxes = []
         original_text = []
         file_name = metadata.get("file_name")
-        
-        
+
         # Collect bounding boxes from both metadata and items
         if "items" in source:
             for item in source["items"]:
@@ -117,17 +117,17 @@ async def ann_narrative_search(query: str) -> List[Dict[str, Any]]:
                 if isinstance(item, dict) and "text" in item:
                     original_text.append(item["text"])
 
+        results.append(
+            {
+                "original_text": original_text,
+                "metadata": metadata,
+                "bounding_box": bboxes,
+                "page_no": metadata.get("page_number"),
+                "pdf_name": file_name,
+                "score": hit.get("_score"),
+            }
+        )
 
-        results.append({
-            "original_text": original_text,
-            "metadata": metadata,
-            "bounding_box": bboxes,
-            "page_no": metadata.get("page_number"),
-            "pdf_name": file_name,
-            "score": hit.get("_score")
-        })
-    
-    
     return results
 
 
@@ -143,7 +143,7 @@ data_extraction_agent = create_react_agent(
         "for 2024 and 2025 filings for a given company. "
         "If the percentage increase in Inventory is significantly higher (15%+) than the percentage increase in Sales (Revenue), "
         "flag this for an ANN-driven narrative audit by the forensic_critic_agent."
-    )
+    ),
 )
 
 # RAG Agent
@@ -151,7 +151,7 @@ rag_agent = create_react_agent(
     model=llm,
     tools=[query_documents],
     name="rag_agent",
-    prompt="You are a retrieval-augmented generation assistant. Use the query_documents tool to find information."
+    prompt="You are a retrieval-augmented generation assistant. Use the query_documents tool to find information.",
 )
 
 # Forensic Critic Agent
@@ -166,24 +166,36 @@ forensic_critic_agent = create_react_agent(
         "3. Check if the ANN results surface terms like 'seasonal' in a non-seasonal quarter. "
         "4. The Critique: If management claims 'robust demand' but the ANN also surfaces footnotes about 'slow-moving stock,' "
         "flag a high Narrative Divergence score."
-    )
+    ),
 )
 
 
 # 4. Create Supervisor Agent
 class SourceDocumentInfo(BaseModel):
     page_no: int = Field(description="Page number of the source document")
-    bounding_box: List[float] = Field(description="Bounding box coordinates [x0, y0, x1, y1]")
-    original_text: Optional[str] = Field(None, description="The original text snippet from the document")
+    bounding_box: List[float] = Field(
+        description="Bounding box coordinates [x0, y0, x1, y1]"
+    )
+    original_text: Optional[str] = Field(
+        None, description="The original text snippet from the document"
+    )
     file_name: Optional[str] = Field(None, description="The name of the source file")
 
+
 class SupervisorResponse(BaseModel):
-    reasoning_for_response: str = Field(description="Detailed reasoning for the final answer")
-    answer: str = Field(alias="response", description="The final direct answer to the user's query.")
-    sources: List[SourceDocumentInfo] = Field(default_factory=list, description="List of source documents")
+    reasoning_for_response: str = Field(
+        description="Detailed reasoning for the final answer"
+    )
+    answer: str = Field(
+        alias="response", description="The final direct answer to the user's query."
+    )
+    sources: List[SourceDocumentInfo] = Field(
+        default_factory=list, description="List of source documents"
+    )
 
     class Config:
         populate_by_name = True
+
 
 supervisor = create_supervisor(
     agents=[data_extraction_agent, rag_agent, forensic_critic_agent],
@@ -227,7 +239,6 @@ supervisor = create_supervisor(
     }
 
         """
-
     ),
     add_handoff_back_messages=True,
     output_mode="full_history",
@@ -243,28 +254,33 @@ class ChatService:
         Processes a user query through the hierarchical agent structure.
         """
         inputs = {"messages": [("user", user_query)]}
-        
+
         # Invoke the compiled graph
         result = await self.app.ainvoke(inputs)
-        
+
         # Extract structured response if present
         structured_response = result.get("structured_response")
-        
+
         # Extract the last message from the result
         messages = result.get("messages", [])
-        
+
         # Collect steps and source documents with traceability
         steps = []
         source_documents = []
-        
+
         # Try to extract structured response from LLM output if langgraph-supervisor didn't do it
         if not structured_response:
             for msg in reversed(messages):
-                if getattr(msg, "name", None) == "supervisor" and hasattr(msg, "content") and msg.content:
+                if (
+                    getattr(msg, "name", None) == "supervisor"
+                    and hasattr(msg, "content")
+                    and msg.content
+                ):
                     import json
                     import re
+
                     # Try to find JSON in the content
-                    json_match = re.search(r'\{.*\}', msg.content, re.DOTALL)
+                    json_match = re.search(r"\{.*\}", msg.content, re.DOTALL)
                     if json_match:
                         try:
                             data = json.loads(json_match.group())
@@ -277,7 +293,7 @@ class ChatService:
         if structured_response:
             reasoning_for_response = structured_response.reasoning_for_response
             response_text = structured_response.answer
-            
+
             # Group boxes by page_no and preserve metadata
             page_to_docs = {}
             for s in structured_response.sources:
@@ -287,53 +303,76 @@ class ChatService:
                         "page_no": s.page_no,
                         "file_name": s.file_name,
                         "bounding_box": [],
-                        "original_text": []
+                        "original_text": [],
                     }
-                
-                if s.bounding_box and s.bounding_box not in page_to_docs[key]["bounding_box"]:
+
+                if (
+                    s.bounding_box
+                    and s.bounding_box not in page_to_docs[key]["bounding_box"]
+                ):
                     page_to_docs[key]["bounding_box"].append(s.bounding_box)
-                if s.original_text and s.original_text not in page_to_docs[key]["original_text"]:
+                if (
+                    s.original_text
+                    and s.original_text not in page_to_docs[key]["original_text"]
+                ):
                     page_to_docs[key]["original_text"].append(s.original_text)
-            
+
             source_documents = [
                 {
                     "page_no": info["page_no"],
                     "file_name": info["file_name"],
                     "bounding_box": info["bounding_box"],
-                    "original_text": " | ".join(info["original_text"]) if info["original_text"] else None
+                    "original_text": (
+                        " | ".join(info["original_text"])
+                        if info["original_text"]
+                        else None
+                    ),
                 }
                 for info in page_to_docs.values()
             ]
         else:
             # Fallback logic for extraction if structured_response is missing
             last_message = messages[-1] if messages else None
-            response_text = last_message.content if last_message and hasattr(last_message, "content") else "No response generated."
-            
+            response_text = (
+                last_message.content
+                if last_message and hasattr(last_message, "content")
+                else "No response generated."
+            )
+
             # Try to find a supervisor message with reasoning
-            reasoning_for_response = "Logic execution completed. Please check agent steps for details."
+            reasoning_for_response = (
+                "Logic execution completed. Please check agent steps for details."
+            )
             for msg in reversed(messages):
-                if getattr(msg, "name", None) == "supervisor" and hasattr(msg, "content") and msg.content:
+                if (
+                    getattr(msg, "name", None) == "supervisor"
+                    and hasattr(msg, "content")
+                    and msg.content
+                ):
                     reasoning_for_response = msg.content[:500]
                     break
 
         # Always collect source documents from tool messages as a robust fallback/supplement
         for msg in messages:
             agent_name = getattr(msg, "name", None) or "supervisor"
-            
+
             # Extract tool calls and results
             if hasattr(msg, "tool_calls") and msg.tool_calls:
                 for tc in msg.tool_calls:
-                    steps.append({
-                        "agent": str(agent_name),
-                        "tool": tc.get("name"),
-                        "input": tc.get("args")
-                    })
-            
+                    steps.append(
+                        {
+                            "agent": str(agent_name),
+                            "tool": tc.get("name"),
+                            "input": tc.get("args"),
+                        }
+                    )
+
             # If it's a ToolMessage, try to extract bounding boxes
             if msg.type == "tool":
                 try:
                     import json
                     import ast
+
                     # Tool outputs might be JSON or Python string representation
                     content_str = msg.content
                     try:
@@ -341,20 +380,21 @@ class ChatService:
                     except:
                         # Fallback to ast.literal_eval for Python-style list strings
                         content_data = ast.literal_eval(content_str)
-                        
+
                     if isinstance(content_data, list):
                         for item in content_data:
                             if isinstance(item, dict) and "bounding_box" in item:
                                 raw_box = item.get("bounding_box", [])
                                 # Normalize boxes: Handle various nested formats
                                 normalized_boxes = []
+
                                 def extract_box(b):
                                     if isinstance(b, dict):
                                         return [
-                                            float(b.get('x', 0)), 
-                                            float(b.get('y', 0)), 
-                                            float(b.get('w', 0)), 
-                                            float(b.get('h', 0))
+                                            float(b.get("x", 0)),
+                                            float(b.get("y", 0)),
+                                            float(b.get("w", 0)),
+                                            float(b.get("h", 0)),
                                         ]
                                     elif isinstance(b, list) and len(b) > 0:
                                         if isinstance(b[0], dict):
@@ -374,11 +414,13 @@ class ChatService:
 
                                 page_no = item.get("page_no")
                                 if page_no is None:
-                                    page_no = item.get("metadata", {}).get("page_number", 0)
-                                
+                                    page_no = item.get("metadata", {}).get(
+                                        "page_number", 0
+                                    )
+
                                 doc_info = {
                                     "page_no": page_no,
-                                    "bounding_box": normalized_boxes
+                                    "bounding_box": normalized_boxes,
                                 }
                                 # Deduplicate based on page and boxes
                                 if doc_info not in source_documents:
@@ -387,18 +429,41 @@ class ChatService:
                     # Silently fail for malformed tool messages
                     pass
 
-            elif hasattr(msg, "content") and msg.content and agent_name != "supervisor" and agent_name:
-                steps.append({
-                    "agent": str(agent_name),
-                    "content": msg.content[:200] + "..." if len(msg.content) > 200 else msg.content
-                })
+            elif (
+                hasattr(msg, "content")
+                and msg.content
+                and agent_name != "supervisor"
+                and agent_name
+            ):
+                steps.append(
+                    {
+                        "agent": str(agent_name),
+                        "content": (
+                            msg.content[:200] + "..."
+                            if len(msg.content) > 200
+                            else msg.content
+                        ),
+                    }
+                )
 
         return {
             "response": response_text,
             "source_documents": source_documents,
             "agent_steps": steps,
-            "reasoning_for_response": reasoning_for_response
+            "reasoning_for_response": reasoning_for_response,
         }
+
+    async def generate_title(self, user_query: str) -> str:
+        """
+        Generates a short, descriptive title for the chat based on the initial query.
+        """
+        prompt = (
+            "Based on the following user query, generate a very short, descriptive title "
+            "(maximum 5 words) for the chat conversation. Return only the title text.\n\n"
+            f"Query: {user_query}"
+        )
+        response = await llm.ainvoke(prompt)
+        return response.content.strip().strip('"')
 
 
 chat_service = ChatService()
