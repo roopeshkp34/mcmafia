@@ -1,4 +1,4 @@
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any
 from langchain_openai import AzureChatOpenAI
 from langchain_core.tools import tool
 from langgraph.prebuilt import create_react_agent
@@ -192,6 +192,18 @@ class ChatService:
             "agent_steps": steps,
             "reasoning_for_response": reasoning
         }
+
+    async def generate_title(self, user_query: str) -> str:
+        """
+        Generates a short, descriptive title for the chat based on the initial query.
+        """
+        prompt = (
+            "Based on the following user query, generate a very short, descriptive title "
+            "(maximum 5 words) for the chat conversation. Return only the title text.\n\n"
+            f"Query: {user_query}"
+        )
+        response = await llm.ainvoke(prompt)
+        return response.content.strip().strip('"')
 
 
 chat_service = ChatService()
