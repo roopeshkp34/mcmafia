@@ -28,6 +28,7 @@ class Settings(BaseSettings):
 
     ELASTIC_ENDPOINT: str
     ELASTIC_API_KEY: str
+    TAVILY_API_KEY: str
 
 
 settings = Settings()

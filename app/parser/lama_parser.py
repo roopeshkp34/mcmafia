@@ -131,39 +131,12 @@ class LlamaParser:
         )
         print(f"Successfully pushed parsed data to MongoDB with ID: {inserted_id}")
 
-        # Index into Elasticsearch for Semantic Search
-        # Using a fixed index name for now as in previous implementation
-        index_name = "documents"
-        await es_client.create_index(index_name, ES_MAPPING)
-
-        total_pages = len(result.markdown.pages)
-        for i, page in enumerate(result.markdown.pages):
-            print(f"Vectorizing and indexing page {i+1}/{total_pages}...")
-
-            # Generate embedding for the markdown content
-            vector = await embedding_service.get_embedding(page.markdown)
-
-            # Prepare metadata (placeholders or extracted)
-            metadata = {
-                "company_ticker": "UNKNOWN",  # Placeholder
-                "fiscal_year": 2024,  # Placeholder
-                "report_type": "10-K",  # Placeholder
-                "section_name": "General",  # Placeholder
-                "page_number": i + 1,
-                "chunk_index": 0,  # Assuming 1 chunk per page for now
-                "total_chunks": 1,
-            }
-
-            es_doc = {
-                "text": page.markdown,
-                "vector_embedding": vector,
-                "metadata": metadata,
-                "filing_date": "2024-01-01",  # Placeholder
-            }
-
-            await es_client.index_document(
-                index_name, es_doc, doc_id=f"{file_obj.id}_p{i+1}"
-            )
+        # Indexing into Elasticsearch is now handled by the MongoToESSyncer service
+        # which watches for new documents in MongoDB.
+        
+        # for i, page in enumerate(result.markdown.pages):
+        #     print(f"Vectorizing and indexing page {i+1}/{total_chunks}...")
+        #     ...
 
         # Download screenshots
         # await self.download_images(result)
