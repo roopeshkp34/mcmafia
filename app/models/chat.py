@@ -9,7 +9,7 @@ class ChatRequest(BaseModel):
 
 class SourceDocument(BaseModel):
     page_no: int
-    bounding_box: List[Dict[str, Any]]
+    bounding_box: List[List[float]]
 
 
 class AgentStep(BaseModel):

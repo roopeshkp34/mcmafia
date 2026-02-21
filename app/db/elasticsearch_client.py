@@ -65,7 +65,7 @@ class ElasticsearchClient:
                             }
                         }
                     ],
-                    "window_size": 100
+                    "rank_window_size": 100
                 }
             }
         }
@@ -94,6 +94,7 @@ class ElasticsearchClient:
             # Note: Depending on how data is stored in Mongo, we might need to extract text
             # Here we assume json_pages contains the content as per lama_parser.py
             for i, page in enumerate(doc.get("json_pages", [])):
+                
                 # If json_pages doesn't have markdown, we handle it
                 # For this implementation, we'll try to get text from columns/items if markdown is missing
                 text_content = ""
@@ -111,6 +112,7 @@ class ElasticsearchClient:
                 es_doc = {
                     "text": text_content,
                     "vector_embedding": vector,
+                    "items": page.get("items", []),
                     "metadata": {
                         "company_ticker": company_ticker or "UNKNOWN",
                         "fiscal_year": fiscal_year or 2024,
