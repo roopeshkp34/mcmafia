@@ -206,7 +206,7 @@ supervisor = create_supervisor(
         "\n\nExample of Good Reasoning:"
         "\n'I called the data_extraction_agent which found that Inventory increased by 22%% while Sales grew by only 4%%. Since the divergence is > 15%%, I then tasked the forensic_critic_agent to examine management justifications. The critic found that while management claimed supply chain optimism, footnotes indicated slow-moving clearance stock, confirming a high Narrative Divergence.'"
         "
-        NOTE: always call the `rag_agent` and `forensic_critic_agent` and provide the response in the following format
+        NOTE: always call the `rag_agent`, `data_extraction_agent`, `forensic_critic_agent` and provide the response in the following format
         {
             "reasoning_for_response": "<reasoning>",
             "response": "<answer>",
