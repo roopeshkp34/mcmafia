@@ -21,5 +21,17 @@ class ChatCRUD:
             self.collection, {"thread_id": thread_id}, chat
         )
 
+    async def get_chats(self):
+        result = []
+        cursor = self.collection.find()
+        async for chat in cursor:
+            result.append(
+                {
+                    "thread_id": chat["thread_id"],
+                    "title": chat.get("title", "Untitled"),
+                }
+            )
+        return result
+
 
 chat = ChatCRUD("chat")

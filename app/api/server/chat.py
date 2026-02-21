@@ -44,3 +44,9 @@ async def get_chat(thread_id: str):
     if chat:
         chat["_id"] = str(chat["_id"])
     return chat
+
+
+@router.get("/chats")
+async def get_chats():
+    chats = await crud.chat.get_chats()
+    return chats
