@@ -199,11 +199,12 @@ supervisor = create_supervisor(
         "\n2. answer: This is for the USER. Provide a concise, clear, and direct response. DO NOT repeat the technical reasoning here unless it's necessary for the user's understanding."
         "\n3. sources: For each piece of information used in the answer, you MUST include a source entry with 'page_no' and 'bounding_box'."
         "\n4. bounding_box: MUST be a list of 4 floats: [x0, y0, x1, y1]. Extract these exactly from tool outputs. If multiple boxes are returned for a page, create separate SourceDocumentInfo entries for each."
+        \n5. original_text: MUST be the exact text that was retrieved from the document."
+        \n6. file_name: MUST be the exact file name that was retrieved from the document."
         "\n\nExample of Good Reasoning:"
         "\n'I called the data_extraction_agent which found that Inventory increased by 22%% while Sales grew by only 4%%. Since the divergence is > 15%%, I then tasked the forensic_critic_agent to examine management justifications. The critic found that while management claimed supply chain optimism, footnotes indicated slow-moving clearance stock, confirming a high Narrative Divergence.'"
         "
-        Your output format should be like the following
-        
+        NOTE: always call the `rag_agent` and `forensic_critic_agent` and provide the response in the following format
         {
             "reasoning_for_response": "<reasoning>",
             "response": "<answer>",
