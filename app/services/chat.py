@@ -40,20 +40,26 @@ async def _query_documents_logic(query: str) -> List[Dict[str, Any]]:
     results = []
     for hit in response.get("hits", {}).get("hits", []):
         bboxes = []
+        original_text = []
         source = hit.get("_source", {})
         metadata = source.get("metadata", {})
+        file_name =metadata.get("file_name")
         
         # Collect bounding boxes from both metadata and items
         if "items" in source:
             for item in source["items"]:
                 if isinstance(item, dict) and "bbox" in item:
                     bboxes.append(item["bbox"])
+                if isinstance(item, dict) and "text" in item:
+                    original_text.append(item["text"])
+        
         
         results.append({
-            "text": source.get("text"),
+            "original_text": original_text,
             "metadata": metadata,
             "bounding_box": bboxes,
             "page_no": metadata.get("page_number"),
+            "pdf_name": file_name,
             "score": hit.get("_score")
         })
     
@@ -193,10 +199,14 @@ supervisor = create_supervisor(
             "sources": [
                 {
                     "page_no": <page_no>,
+                    "original_text": "<original_text>",
+                    "file_name": "<file_name>",
                     "bounding_box": [<bbox>]
                 },
                 {
                     "page_no": <page_no>,
+                    "original_text": "<original_text>",
+                    "file_name": "<file_name>",
                     "bounding_box": [<bbox>]
                 }
     ]
