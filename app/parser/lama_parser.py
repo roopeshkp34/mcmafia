@@ -3,8 +3,38 @@ import httpx
 import re
 import asyncio
 from llama_cloud import AsyncLlamaCloud
+from fastapi import UploadFile
+
 from app.db.database import DatabaseClient
 from app.core.config import settings
+from app.db.elasticsearch_client import es_client
+from app.services.embedding import embedding_service
+
+ES_MAPPING = {
+    "mappings": {
+        "properties": {
+            "text": {"type": "text"},
+            "vector_embedding": {
+                "type": "dense_vector",
+                "dims": 1536,
+                "index": True,
+                "similarity": "cosine",
+            },
+            "metadata": {
+                "properties": {
+                    "company_ticker": {"type": "keyword"},
+                    "fiscal_year": {"type": "integer"},
+                    "report_type": {"type": "keyword"},
+                    "section_name": {"type": "keyword"},
+                    "page_number": {"type": "integer"},
+                    "chunk_index": {"type": "integer"},
+                    "total_chunks": {"type": "integer"},
+                }
+            },
+            "filing_date": {"type": "date"},
+        }
+    }
+}
 
 # In LlamaCloud SDK some types might be needed for isinstance checks if they are exported
 # If not, we can use Duck Typing or internal imports
@@ -12,7 +42,6 @@ try:
     from llama_cloud.types import ItemsPageStructuredResultPageItemTableItem
 except ImportError:
     ItemsPageStructuredResultPageItemTableItem = type(None)  # Fallback
-
 
 
 class LlamaParser:
@@ -46,9 +75,7 @@ class LlamaParser:
     async def parse_document(self, file: UploadFile):
 
         # Upload and parse a document
-        file_obj = await self.client.files.create(
-            file=file.file , purpose="parse"
-        )
+        file_obj = await self.client.files.create(file=file.file, purpose="parse")
 
         result = await self.client.parsing.parse(
             file_id=file_obj.id,
@@ -96,8 +123,44 @@ class LlamaParser:
                     )
 
         # Insert into MongoDB
-        inserted_id = await self.db_client.insert_parsed_data("parsed_documents", parsed_data)
+        inserted_id = await self.db_client.insert_parsed_data(
+            "parsed_documents", parsed_data
+        )
         print(f"Successfully pushed parsed data to MongoDB with ID: {inserted_id}")
+
+        # Index into Elasticsearch for Semantic Search
+        # Using a fixed index name for now as in previous implementation
+        index_name = "documents"
+        await es_client.create_index(index_name, ES_MAPPING)
+
+        total_pages = len(result.markdown.pages)
+        for i, page in enumerate(result.markdown.pages):
+            print(f"Vectorizing and indexing page {i+1}/{total_pages}...")
+
+            # Generate embedding for the markdown content
+            vector = await embedding_service.get_embedding(page.markdown)
+
+            # Prepare metadata (placeholders or extracted)
+            metadata = {
+                "company_ticker": "UNKNOWN",  # Placeholder
+                "fiscal_year": 2024,  # Placeholder
+                "report_type": "10-K",  # Placeholder
+                "section_name": "General",  # Placeholder
+                "page_number": i + 1,
+                "chunk_index": 0,  # Assuming 1 chunk per page for now
+                "total_chunks": 1,
+            }
+
+            es_doc = {
+                "text": page.markdown,
+                "vector_embedding": vector,
+                "metadata": metadata,
+                "filing_date": "2024-01-01",  # Placeholder
+            }
+
+            await es_client.index_document(
+                index_name, es_doc, doc_id=f"{file_obj.id}_p{i+1}"
+            )
 
         # Download screenshots
         await self.download_images(result)
