@@ -13,11 +13,18 @@ class Settings(BaseSettings):
     AZURE_OPENAI_ENDPOINT: str
     AZURE_OPENAI_API_VERSION: str
     AZURE_OPENAI_DEPLOYMENT: str
+    AZURE_OPENAI_EMBEDDING_DEPLOYMENT: str = "text-embedding-3-small"
 
     LLAMA_PARSE_API_KEY: str
 
     MONGO_URI: str
     MONGO_DB_NAME: str
+
+    QDRANT_URL: str
+    QDRANT_API_KEY: str
+
+    ELASTIC_ENDPOINT: str
+    ELASTIC_API_KEY: str
 
 
 settings = Settings()
