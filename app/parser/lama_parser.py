@@ -42,10 +42,10 @@ ES_MAPPING = {
                             "y": {"type": "float"},
                             "w": {"type": "float"},
                             "h": {"type": "float"},
-                            "confidence": {"type": "float"}
+                            "confidence": {"type": "float"},
                         }
-                    }
-                }
+                    },
+                },
             },
             "filing_date": {"type": "date"},
         }
@@ -125,7 +125,7 @@ class LlamaParser:
             ],
             "tables": [],
         }
-        print(result)
+        # print(result)
 
         # Extract tables
         for page in result.items.pages:
@@ -149,7 +149,7 @@ class LlamaParser:
 
         # Indexing into Elasticsearch is now handled by the MongoToESSyncer service
         # which watches for new documents in MongoDB.
-        
+
         # for i, page in enumerate(result.markdown.pages):
         #     print(f"Vectorizing and indexing page {i+1}/{total_chunks}...")
         #     ...

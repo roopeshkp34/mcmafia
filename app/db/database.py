@@ -1,8 +1,6 @@
-import os
 from motor.motor_asyncio import AsyncIOMotorClient
 
 from app.core.config import settings
-
 
 
 class DatabaseClient:
@@ -26,6 +24,24 @@ class DatabaseClient:
             return result.inserted_id
         except Exception as e:
             print(f"Error inserting data into MongoDB: {e}")
+            raise
+
+    async def insert(self, collection, data: dict):
+        return await collection.insert_one(data)
+
+    async def update(self, collection, query: dict, data: dict):
+        """
+        Updates data in the MongoDB collection.
+        """
+        try:
+            # Avoid modifying _id field which is immutable in MongoDB
+            update_data = data.copy()
+            update_data.pop("_id", None)
+
+            result = await collection.update_one(query, {"$set": update_data})
+            return result.modified_count
+        except Exception as e:
+            print(f"Error updating data in MongoDB: {e}")
             raise
 
     async def close(self):

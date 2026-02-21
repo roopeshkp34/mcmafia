@@ -3,6 +3,8 @@ from fastapi import APIRouter
 from app.models.chat import ChatRequest, ChatResponse
 from app.services.chat import chat_service
 
+from app import crud
+
 router = APIRouter()
 
 
@@ -11,8 +13,23 @@ async def chat(request: ChatRequest):
     """
     Endpoint to interact with the hierarchical agent system.
     """
+    chat = await crud.chat.get_chat(request.thread_id)
+    if chat:
+        new_chat = {"type": "user", "content": request.query}
+        chat["messages"].append(new_chat)
+        await crud.chat.update_chat(request.thread_id, chat)
+    else:
+        db_obj = {
+            "thread_id": request.thread_id,
+            "title": "Dummy",
+            "messages": [{"type": "user", "content": request.query}],
+        }
+        chat = await crud.chat.create_chat(db_obj)
     result = await chat_service.chat(request.query)
-    
+
+    new_chat = {"type": "assistant", "content": result["response"]}
+    chat["messages"].append(new_chat)
+    await crud.chat.update_chat(request.thread_id, chat)
     # return ChatResponse(
     #     response=result["response"],
     #     agent_steps=result.get("agent_steps"),
