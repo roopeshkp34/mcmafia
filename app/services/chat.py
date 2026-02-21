@@ -105,20 +105,26 @@ async def ann_narrative_search(query: str) -> List[Dict[str, Any]]:
         source = hit.get("_source", {})
         metadata = source.get("metadata", {})
         bboxes = []
+        original_text = []
+        
         
         # Collect bounding boxes from both metadata and items
         if "items" in source:
             for item in source["items"]:
                 if isinstance(item, dict) and "bbox" in item:
                     bboxes.append(item["bbox"])
-        
+                if isinstance(item, dict) and "text" in item:
+                    original_text.append(item["text"])
+
         results.append({
             "text": source.get("text"),
-            "metadata": metadata,
             "bounding_box": bboxes,
             "page_no": metadata.get("page_number"),
+            "file_name": metadata.get("file_name"),
+            "original_text": original_text,
             "score": hit.get("_score")
         })
+    
     
     return results
 
@@ -165,12 +171,17 @@ forensic_critic_agent = create_react_agent(
 # 4. Create Supervisor Agent
 class SourceDocumentInfo(BaseModel):
     page_no: int = Field(description="Page number of the source document")
-    bounding_box: List[float] = Field(description="Bounding box coordinates [x0, y0, x1, y1] for the source text. If a page has multiple relevant boxes, provide them as separate source entries. bbox in the tool output is a list of floats")
+    bounding_box: List[float] = Field(description="Bounding box coordinates [x0, y0, x1, y1]")
+    original_text: Optional[str] = Field(None, description="The original text snippet from the document")
+    file_name: Optional[str] = Field(None, description="The name of the source file")
 
 class SupervisorResponse(BaseModel):
-    reasoning_for_response: str = Field(description="Detailed reasoning for the final answer, explaining the logic and steps used. Use the sources to justify your reasoning.")
-    answer: str = Field(description="The final direct answer to the user's query.")
-    sources: List[SourceDocumentInfo] = Field(description="List of source documents with page numbers and bounding boxes retrieved from tool outputs. These are in the response of tool calls")
+    reasoning_for_response: str = Field(description="Detailed reasoning for the final answer")
+    answer: str = Field(alias="response", description="The final direct answer to the user's query.")
+    sources: List[SourceDocumentInfo] = Field(default_factory=list, description="List of source documents")
+
+    class Config:
+        populate_by_name = True
 
 supervisor = create_supervisor(
     agents=[data_extraction_agent, rag_agent, forensic_critic_agent],
@@ -199,14 +210,14 @@ supervisor = create_supervisor(
             "sources": [
                 {
                     "page_no": <page_no>,
-                    "original_text": "<original_text>",
-                    "file_name": "<file_name>",
+                    "original_text": "<original_text_that_was_retrieved_from_the_document>",
+                    "file_name": "<file_name_of_the_document>",
                     "bounding_box": [<bbox>]
                 },
                 {
                     "page_no": <page_no>,
-                    "original_text": "<original_text>",
-                    "file_name": "<file_name>",
+                    "original_text": "<original_text_that_was_retrieved_from_the_document>",
+                    "file_name": "<file_name_of_the_document>",
                     "bounding_box": [<bbox>]
                 }
     ]
@@ -243,23 +254,52 @@ class ChatService:
         steps = []
         source_documents = []
         
-        # If we have a structured response, use it for primary values
+        # Try to extract structured response from LLM output if langgraph-supervisor didn't do it
+        if not structured_response:
+            for msg in reversed(messages):
+                if getattr(msg, "name", None) == "supervisor" and hasattr(msg, "content") and msg.content:
+                    import json
+                    import re
+                    # Try to find JSON in the content
+                    json_match = re.search(r'\{.*\}', msg.content, re.DOTALL)
+                    if json_match:
+                        try:
+                            data = json.loads(json_match.group())
+                            structured_response = SupervisorResponse(**data)
+                            break
+                        except Exception:
+                            continue
+
+        # If we have a structured response (either from supervisor or fallback), use it
         if structured_response:
             reasoning_for_response = structured_response.reasoning_for_response
             response_text = structured_response.answer
             
-            # Group boxes by page_no
-            page_to_boxes = {}
+            # Group boxes by page_no and preserve metadata
+            page_to_docs = {}
             for s in structured_response.sources:
-                if s.page_no not in page_to_boxes:
-                    page_to_boxes[s.page_no] = []
-                # Ensure we add the box if it's not already there
-                if s.bounding_box not in page_to_boxes[s.page_no]:
-                    page_to_boxes[s.page_no].append(s.bounding_box)
+                key = (s.page_no, s.file_name)
+                if key not in page_to_docs:
+                    page_to_docs[key] = {
+                        "page_no": s.page_no,
+                        "file_name": s.file_name,
+                        "bounding_box": [],
+                        "original_text": []
+                    }
+                
+                if s.bounding_box and s.bounding_box not in page_to_docs[key]["bounding_box"]:
+                    page_to_docs[key]["bounding_box"].append(s.bounding_box)
+                if s.original_text and s.original_text not in page_to_docs[key]["original_text"]:
+                    page_to_docs[key]["original_text"].append(s.original_text)
             
             source_documents = [
-                {"page_no": p, "bounding_box": boxes}
-                for p, boxes in page_to_boxes.items()
+                {
+                    "page_no": info["page_no"],
+                    "file_name": info["file_name"],
+                    "bounding_box": info["bounding_box"],
+                    "original_text": " | ".join(info["original_text"]) if info["original_text"] else None
+                }
+                for info in page_to_docs.values()
             ]
         else:
             # Fallback logic for extraction if structured_response is missing
